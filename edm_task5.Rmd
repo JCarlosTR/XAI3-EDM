@@ -1,0 +1,195 @@
+---
+title: "edm_task5"
+author: "Juan Carlos Trujillo, Jaime Ballester, Marc Romeu"
+date: "2025-05-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# Cargar librerías necesarias
+library(tidyverse)
+library(randomForest)
+library(pdp)
+
+# Cargar datos
+bike_data <- read.csv("day.csv")
+
+# One-hot encoding para 'season'
+bike_data <- bike_data |>
+  mutate(
+    season_2 = as.integer(season == 2),
+    season_3 = as.integer(season == 3),
+    season_4 = as.integer(season == 4)
+  )
+
+# Crear variables MISTY y RAIN
+bike_data <- bike_data |>
+  mutate(
+    misty = as.integer(weathersit == 2),
+    rain = as.integer(weathersit %in% c(3, 4))
+  )
+
+# Desnormalizar variables
+bike_data <- bike_data |>
+  mutate(
+    temp_real = temp * 41,
+    hum_real = hum * 100,
+    windspeed_real = windspeed * 67
+  )
+
+# Calcular días desde el 01/01/2011
+bike_data <- bike_data |>
+  mutate(
+    date = as.Date(dteday),
+    days_since_2011 = as.integer(date - as.Date("2011-01-01"))
+  )
+```
+
+```{r}
+# Entrenamiento del modelo Random Forest para predecir 'cnt'
+set.seed(123)
+rf_model <- randomForest(
+  cnt ~ .,
+  data = bike_data,
+  ntree = 100
+)
+
+```
+
+### Exercise 1
+
+```{r}
+# Librerías necesarias
+library(tidyverse)
+library(randomForest)
+library(pdp)
+library(patchwork)
+
+# Variables a graficar
+vars <- c("temp_real", "hum_real", "windspeed_real", "days_since_2011")
+
+# Generar PDPs con eje Y fijo y solo la primera con eje Y etiquetado
+pdp_plots <- lapply(seq_along(vars), function(i) {
+  v <- vars[i]
+  p <- partial(rf_model, pred.var = v, train = bike_data) |>
+    autoplot() +
+    labs(
+      x = str_to_title(gsub("_real", "", v)),
+      y = if (i == 1) "Predicted number of bike rentals" else NULL
+    ) +
+    ylim(4000, 5000) +
+    theme_minimal(base_size = 12) +
+    theme(
+      axis.title.y = if (i == 1) element_text(size = 12) else element_blank(),
+      axis.text.y  = if (i == 1) element_text(size = 10) else element_blank(),
+      axis.ticks.y = if (i == 1) element_line() else element_blank()
+    )
+  return(p)
+})
+
+# Combinar los plots
+combined_plot <- wrap_plots(pdp_plots, nrow = 1)
+
+# Mostrar resultado
+print(combined_plot)
+
+```
+Analyse the influence of days since 2011, temperature, humidity and wind speed 
+on the predicted bike counts. 
+
+### Exercise 2
+
+```{r}
+# Librerías necesarias
+library(tidyverse)
+library(randomForest)
+library(pdp)
+library(patchwork)
+
+# Submuestreo para evitar alto costo computacional
+set.seed(123)
+
+
+# PDP 2D con autoplot
+pdp_2d <- partial(
+  object = rf_model,
+  pred.var = c("temp_real", "hum_real"),
+  train = bike_data,
+  grid.resolution = 20,
+  progress = "none"
+)
+
+pdp_plot <- autoplot(pdp_2d, contour = FALSE) +
+  scale_fill_viridis_c(option = "C") +
+  labs(
+    title = "2D PDP - Temperature vs Humidity",
+    x = "Temperature (°C)",
+    y = "Humidity (%)",
+    fill = "Predicted rentals"
+  ) +
+  theme_minimal(base_size = 12)
+
+# Combinar todo horizontalmente
+(pdp_plot) +
+  plot_layout(widths = c(2.2))
+
+
+```
+
+### Exercise 3
+```{r}
+# Cargar librerías
+library(tidyverse)
+library(randomForest)
+library(pdp)
+
+# Cargar y previsualizar los datos
+kc_data <- read_csv("kc_house_data.csv")
+
+# Muestra aleatoria para reducir la carga computacional
+set.seed(123)
+
+```
+
+```{r}
+# Selección de variables predictoras
+predictors <- c("bedrooms", "bathrooms", "sqft_living", "sqft_lot", "floors", "yr_built")
+
+# Entrenar modelo de Random Forest para predecir 'price'
+rf_kc <- randomForest(
+  x = kc_data[, predictors],
+  y = kc_data$price,
+  ntree = 100
+)
+
+```
+```{r}
+library(patchwork)
+
+# Variables a analizar
+vars <- c("bedrooms", "bathrooms", "sqft_living", "floors")
+
+# Crear PDPs con eje Y fijo entre 500k y 2.5M, solo primer gráfico con etiqueta Y
+pdp_kc_plots <- lapply(seq_along(vars), function(i) {
+  v <- vars[i]
+  partial(rf_kc, pred.var = v, train = kc_data) |>
+    autoplot() +
+    labs(
+      x = str_to_title(gsub("_", " ", v)),
+      y = if (i == 1) "Predicted price (USD)" else NULL
+    ) +
+    ylim(500000, 2500000) +
+    theme_minimal(base_size = 12) +
+    theme(
+      axis.title.y = if (i == 1) element_text(size = 12) else element_blank(),
+      axis.text.y  = if (i == 1) element_text(size = 10) else element_blank(),
+      axis.ticks.y = if (i == 1) element_line() else element_blank()
+    )
+})
+
+# Combinar en una sola fila
+wrap_plots(pdp_kc_plots, nrow = 1)
+
+
+```
+
