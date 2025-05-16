@@ -48,9 +48,13 @@ bike_data <- bike_data |>
 ```{r}
 # Entrenamiento del modelo Random Forest para predecir 'cnt'
 set.seed(123)
+
+features <- c("days_since_2011", "temp_real", "hum_real", "windspeed_real")
+model_data <- bike_data[, c(features, "cnt")]
+
 rf_model <- randomForest(
   cnt ~ .,
-  data = bike_data,
+  data = model_data,
   ntree = 100
 )
 
@@ -65,35 +69,23 @@ library(randomForest)
 library(pdp)
 library(patchwork)
 
-# Variables a graficar
-vars <- c("temp_real", "hum_real", "windspeed_real", "days_since_2011")
 
 # Generar PDPs con eje Y fijo y solo la primera con eje Y etiquetado
-pdp_plots <- lapply(seq_along(vars), function(i) {
-  v <- vars[i]
-  p <- partial(rf_model, pred.var = v, train = bike_data) |>
-    autoplot() +
-    labs(
-      x = str_to_title(gsub("_real", "", v)),
-      y = if (i == 1) "Predicted number of bike rentals" else NULL
-    ) +
-    ylim(4000, 5000) +
-    theme_minimal(base_size = 12) +
-    theme(
-      axis.title.y = if (i == 1) element_text(size = 12) else element_blank(),
-      axis.text.y  = if (i == 1) element_text(size = 10) else element_blank(),
-      axis.ticks.y = if (i == 1) element_line() else element_blank()
-    )
-  return(p)
-})
+pdp1 <- partial(rf_model, pred.var = "days_since_2011", plot = TRUE, rug = TRUE, main = "Effect of Days Since 2011")
+pdp2 <- partial(rf_model, pred.var = "temp_real", plot = TRUE, rug = TRUE, main = "Effect of Temperature")
+pdp3 <- partial(rf_model, pred.var = "hum_real", plot = TRUE, rug = TRUE, main = "Effect of Humidity")
+pdp4 <- partial(rf_model, pred.var = "windspeed_real", plot = TRUE, rug = TRUE, main = "Effect of Wind Speed")
 
-# Combinar los plots
-combined_plot <- wrap_plots(pdp_plots, nrow = 1)
 
-# Mostrar resultado
-print(combined_plot)
+
+pdp1
+pdp2
+pdp3
+pdp4
 
 ```
+
+
 Analyse the influence of days since 2011, temperature, humidity and wind speed 
 on the predicted bike counts. 
 
@@ -106,32 +98,48 @@ library(randomForest)
 library(pdp)
 library(patchwork)
 
-# Submuestreo para evitar alto costo computacional
-set.seed(123)
 
 
-# PDP 2D con autoplot
+
+
 pdp_2d <- partial(
   object = rf_model,
   pred.var = c("temp_real", "hum_real"),
-  train = bike_data,
-  grid.resolution = 20,
+  grid.resolution = 30,
   progress = "none"
 )
 
-pdp_plot <- autoplot(pdp_2d, contour = FALSE) +
-  scale_fill_viridis_c(option = "C") +
+pdp_df <- as.data.frame(pdp_2d)
+
+
+
+ggplot() +
+  # Heatmap plano
+  geom_tile(
+    data = pdp_df,
+    aes(x = temp_real, y = hum_real, fill = yhat),
+    width = 1.5, height = 2
+  ) +
+  
+  # Escala de color azul
+  scale_fill_gradient(low = "#440154FF", high = "#FDE725FF") +
+
+  # Rug plots (opcional)
+  geom_rug(data = model_data, aes(x = temp_real), sides = "b", alpha = 0.5) +
+  geom_rug(data = model_data, aes(y = hum_real), sides = "l", alpha = 0.5) +
+
+  # Títulos
   labs(
-    title = "2D PDP - Temperature vs Humidity",
+    title = "2D Partial Dependence Plot",
     x = "Temperature (°C)",
     y = "Humidity (%)",
-    fill = "Predicted rentals"
+    fill = "ŷ"
   ) +
-  theme_minimal(base_size = 12)
+  
+  # Escalado
+  coord_fixed(ratio = 0.25) +
+  theme_minimal()
 
-# Combinar todo horizontalmente
-(pdp_plot) +
-  plot_layout(widths = c(2.2))
 
 
 ```
@@ -162,33 +170,25 @@ rf_kc <- randomForest(
   ntree = 100
 )
 
-```
-```{r}
-library(patchwork)
+
 
 # Variables a analizar
 vars <- c("bedrooms", "bathrooms", "sqft_living", "floors")
 
-# Crear PDPs con eje Y fijo entre 500k y 2.5M, solo primer gráfico con etiqueta Y
-pdp_kc_plots <- lapply(seq_along(vars), function(i) {
-  v <- vars[i]
-  partial(rf_kc, pred.var = v, train = kc_data) |>
-    autoplot() +
-    labs(
-      x = str_to_title(gsub("_", " ", v)),
-      y = if (i == 1) "Predicted price (USD)" else NULL
-    ) +
-    ylim(500000, 2500000) +
-    theme_minimal(base_size = 12) +
-    theme(
-      axis.title.y = if (i == 1) element_text(size = 12) else element_blank(),
-      axis.text.y  = if (i == 1) element_text(size = 10) else element_blank(),
-      axis.ticks.y = if (i == 1) element_line() else element_blank()
-    )
-})
+dp1 <- partial(rf_kc, pred.var = "bedrooms", plot = TRUE, rug = TRUE)
+dp2 <- partial(rf_kc, pred.var = "bathrooms", plot = TRUE, rug = TRUE)
+dp3 <- partial(rf_kc, pred.var = "sqft_living", plot = TRUE, rug = TRUE)
+dp4 <- partial(rf_kc, pred.var = "sqft_lot", plot = TRUE, rug = TRUE)
+dp5 <- partial(rf_kc, pred.var = "floors", plot = TRUE, rug = TRUE)
+dp6 <- partial(rf_kc, pred.var = "yr_built", plot = TRUE, rug = TRUE)
 
-# Combinar en una sola fila
-wrap_plots(pdp_kc_plots, nrow = 1)
+
+dp1
+dp2
+dp3
+dp4
+dp5
+dp6
 
 
 ```
